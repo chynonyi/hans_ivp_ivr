@@ -1,0 +1,121 @@
+# Strategy Parameters
+strategy:
+  # IVP/IVR calculation lookback window (days)
+  ivp_ivr_lookback: 120
+  
+  # IV calculation method (days)
+  iv_mean_window: 60 
+  
+  # Optimization ranges [X, Y]
+  optimization:
+    start: 20
+    end: 40
+    step: 2
+
+# Backtest Parameters
+backtest:
+  freq: '1D'
+  initial_cash: 10000
+  position_size: 100
+  size_type: 'value'
+  fees: 0.0
+  slippage: 0.0
+
+
+# Time Periods
+periods:
+  stocks:
+    data_start: '2014-01-01'        # Load data from here
+    optimization_start: '2024-01-01' # optimization from here
+    end: '2025-01-01'
+    heatmap_window_years: 2
+  
+  etfs:
+    data_start: '2023-01-01'
+    optimization_start: '2024-01-01'
+    end: '2025-01-01'
+    heatmap_window_years: 2
+
+# Tickers
+tickers:
+  # Regular stocks
+  stocks:
+    - ABNB
+    - AMD
+    - AMZN
+    - AAPL
+    - BABA
+    - BRK.B
+    - COIN
+    - CVNA
+    - DIS
+    - DKNG
+    - META
+    - GDX
+    - GME
+    - GOOGL
+    - HIMS
+    - HOOD
+    - JPM
+    - MARA
+    - MRNA
+    - MSFT
+    - MSTR
+    - NFLX
+    - NVDA
+    - PLTR
+    - PYPL
+    - RBLX
+    - RDDT
+    - SMCI
+    - SNOW
+    - TSLA
+    - TSM
+    - XOM
+  
+  # STOCK : ETF
+  etfs:
+    ABNB: ABNY
+    AMD: AMDY
+    AMZN: AMZY
+    AAPL: APLY
+    BABA: BABO
+    BRK.B: BRKC
+    COIN: CONY
+    CVNA: CVNY
+    DIS: DISO
+    DKNG: DRAY
+    META: FBY
+    GDX: GDXY
+    GME: GMEY
+    GOOGL: GOOY
+    HIMS: HIYY
+    HOOD: HOOY
+    JPM: JPMO
+    MARA: MARO
+    MRNA: MRNY
+    MSFT: MSFO
+    MSTR: MSTY
+    NFLX: NFLY
+    NVDA: NVDY
+    PLTR: PLTY
+    PYPL: PYPY
+    RBLX: RBLY
+    RDDT: RDYY
+    SMCI: SMCY
+    SNOW: SNOY
+    TSLA: TSLY
+    TSM: TSMY
+    XOM: XOMO
+
+# Output Settings
+output:
+  reports_dir: 'outputs/reports'
+  heatmaps_dir: 'outputs/heatmaps'
+  best_configs_file: 'outputs/best_configs.csv'
+
+# Data Storage
+data:
+  base_dir: 'data'
+  stocks_dir: 'data/stocks'
+  etfs_dir: 'data/etfs'

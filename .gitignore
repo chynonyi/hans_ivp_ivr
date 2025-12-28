@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+venv/
+env/
+ENV/
+
+.env
+
+outputs/
+data/
+classes/
+
+test.ipynb
