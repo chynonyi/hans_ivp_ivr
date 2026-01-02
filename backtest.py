@@ -1,5 +1,4 @@
 import asyncio
-import sys
 import yaml
 import pandas as pd
 from pathlib import Path
@@ -10,24 +9,29 @@ with open("config.yaml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 # MANUAL SETTINGS (Uncomment to choose yourself, comment to use best configs)
-MANUAL_SETTINGS = {
-    "Symbol": "TSLA",
-    "IVP_from": 30,
-    "IVP_to": 60,
-    "Type": "Stock",  # or ETF or Stock
-}
-#  MANUAL_SETTINGS = None # (Uncomment to use best configs)
+# MANUAL_SETTINGS = {
+#     "Symbol": "TSLA",
+#     "IVP_from": 30,
+#     "IVP_to": 60,
+#     "Type": "Stock",  # or ETF or Stock
+# }
+MANUAL_SETTINGS = None # (Uncomment to use best configs)
 
 
 async def main():
     print("Starting Backtest")
     data_service = DataService(CONFIG)
 
+    heatmaps_dir = Path(CONFIG["output"]["heatmaps_dir"])
+    heatmaps_dir.mkdir(parents=True, exist_ok=True)
     reports_dir = Path(CONFIG["output"]["reports_dir"])
     reports_dir.mkdir(parents=True, exist_ok=True)
     trades_dir = reports_dir.parent / "trades"
     trades_dir.mkdir(parents=True, exist_ok=True)
 
+    # Directory where optimize.py saves raw results
+    opt_results_dir = Path("outputs/optimization_results")
+    
     lookback = CONFIG["strategy"]["ivp_ivr_lookback"]
 
     # 1. Determine list of configs to run
@@ -87,20 +91,36 @@ async def main():
         except:
             pass
 
-        # Export PDF
-        if "Total Return [%]" not in row:
-            row["Total Return [%]"] = pf.total_return() * 100
+        # Save Portfolio Stats PDF
+        try:
+            stats_pdf_path = reports_dir / f"{symbol}_stats.pdf"
+            VisualizationService.save_portfolio_stats_pdf(
+                pf=pf, 
+                output_path=str(stats_pdf_path)
+            )
+            print(f"Saved Stats PDF: {stats_pdf_path}")
+        except Exception as e:
+            print(f"Failed to save stats PDF: {e}")
 
-        VisualizationService.create_comprehensive_pdf(
-            symbol=symbol,
-            best_config=row,
-            best_pf=pf,
-            all_results=[],
-            output_path=str(reports_dir / f"{symbol}_report.pdf"),
-        )
+        # Create Heatmap
+        opt_results_file = opt_results_dir / f"{symbol}_opt_results.csv"
+        
+        if opt_results_file.exists():
+            try:
+                opt_results_df = pd.read_csv(opt_results_file)
+                heatmap_pdf_path = heatmaps_dir / f"{symbol}_heatmap.pdf"
 
-    print(f"Done. Reports saved to {reports_dir}")
-
+                # Create the heatmap using the persisted data
+                VisualizationService.create_heatmap(
+                    results_df=opt_results_df,
+                    metric_name="Total Return [%]",
+                    output_path=str(heatmap_pdf_path),
+                )
+                print(f"Saved Heatmap: {heatmap_pdf_path}")
+            except Exception as e:
+                print(f"Failed to create heatmap: {e}")
+        else:
+            print(f"Heatmap skipped: No optimization data found at {opt_results_file}")
 
 if __name__ == "__main__":
     asyncio.run(main())

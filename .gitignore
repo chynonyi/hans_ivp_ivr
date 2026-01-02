@@ -1,13 +1,8 @@
-# Python
 __pycache__/
-venv/
-env/
-ENV/
-
+.venv/
 .env
 
 outputs/
 data/
 classes/
-
 test.ipynb

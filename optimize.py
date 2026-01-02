@@ -1,5 +1,4 @@
 import asyncio
-import sys
 import yaml
 import pandas as pd
 from pathlib import Path
@@ -24,6 +23,10 @@ async def main():
     heatmaps_dir = Path(CONFIG["output"]["heatmaps_dir"])
     heatmaps_dir.mkdir(parents=True, exist_ok=True)
     best_configs_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # New directory for raw optimization results
+    opt_results_dir = Path("outputs/optimization_results")
+    opt_results_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
 
@@ -53,8 +56,10 @@ async def main():
             optimization_end=opt_end,
             optimization_date_start=opt_date_start,
         )
+        print(f"Optimizaion for {symbol} was successful")
 
         if not opt_results:
+            print(f"Optimizaion for {symbol} was unsuccessful")
             continue
 
         best = find_best_config(opt_results)
@@ -62,25 +67,26 @@ async def main():
             best["Symbol"] = symbol
             best["Type"] = "Stock"
             results.append(best)
-
-            # Heatmap
-            heatmap_path = heatmaps_dir / f"{symbol}_optimization_heatmap.png"
             results_df = pd.DataFrame(opt_results)
-            VisualizationService.create_heatmap(
-                results_df=results_df,
-                metric_name="Total Return [%]",
-                output_path=str(heatmap_path),
-            )
-
+            # Save raw optimization results for backtest.py
+            results_df.to_csv(opt_results_dir / f"{symbol}_opt_results.csv", index=False)
+            # # Heatmap
+            # heatmap_path = heatmaps_dir / f"{symbol}_optimization_heatmap.png"
+            # 
+            # VisualizationService.create_heatmap(
+            #     results_df=results_df,
+            #     metric_name="Total Return %",
+            #     output_path=str(heatmap_path),
+            # )
     # 2. ETFs
     etfs = CONFIG["tickers"]["etfs"]
     opt_date_start_etf = CONFIG["periods"]["etfs"]["optimization_start"]
 
-    for base, etf_symbol in etfs.items():
-        print(f"Optimizing {etf_symbol}...")
+    for stock_symbol, etf_symbol in etfs.items():
+        print(f"Optimizing {stock_symbol}:({etf_symbol})...")
         df = data_service.load_data(etf_symbol, is_etf=True)
         if df is None:
-            print(f"Skipping {etf_symbol} (No data - run download.py first)")
+            print(f"Skipping {etf_symbol}: No data found for {etf_symbol}")
             continue
 
         opt_results = IVPIVRProjectService.run_optimization(
@@ -92,8 +98,10 @@ async def main():
             optimization_end=opt_end,
             optimization_date_start=opt_date_start_etf,
         )
+        print(f"Optimizaion for {etf_symbol} was successful")
 
         if not opt_results:
+            print(f"Optimizaion for {etf_symbol} was unsuccessful")
             continue
 
         best = find_best_config(opt_results)
@@ -102,19 +110,20 @@ async def main():
             best["Type"] = "ETF"
             results.append(best)
 
-            # Heatmap
-            heatmap_path = heatmaps_dir / f"{etf_symbol}_optimization_heatmap.png"
             results_df = pd.DataFrame(opt_results)
-            VisualizationService.create_heatmap(
-                results_df=results_df,
-                metric_name="Total Return [%]",
-                output_path=str(heatmap_path),
-            )
-
+            # Save raw optimization results for backtest.py
+            results_df.to_csv(opt_results_dir / f"{etf_symbol}_opt_results.csv", index=False)
+            # # Heatmap
+            # heatmap_path = heatmaps_dir / f"{etf_symbol}_optimization_heatmap.png"
+            # VisualizationService.create_heatmap(
+            #     results_df=results_df,
+            #     metric_name="Total Return %",
+            #     output_path=str(heatmap_path),
+            # )
     # Save Results
     if results:
         df_res = pd.DataFrame(results)
-        df_res = df_res.sort_values("Total Return [%]", ascending=False)
+        df_res = df_res.sort_values("Total Return %", ascending=False)
         df_res.to_csv(best_configs_file, index=False)
         print(f"Optimization results saved to {best_configs_file}")
     else:

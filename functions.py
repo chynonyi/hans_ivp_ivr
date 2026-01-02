@@ -10,6 +10,10 @@ from typing import Optional, Dict, List, Tuple
 from datetime import datetime, timedelta
 import vectorbt as vbt
 import numpy as np
+
+# Set matplotlib to use non-GUI backend before importing pyplot
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
@@ -152,11 +156,9 @@ class DataService:
             # Map IV to dates
             iv_map = {}
             if iv_data and "date" in iv_data:
-                dates = iv_data["date"]  # looks like {0: '2023-01-01', ...}
+                dates = iv_data["date"]  
                 iv_vals = iv_data.get(f"{STRATEGY_IV_MEAN_WINDOW}d IV Mean", {})
 
-                # Create map: date_str -> iv_val
-                # iv_vals is also {0: 0.5, ...}
                 for idx, dt_str in dates.items():
                     val = iv_vals.get(idx)
                     iv_map[dt_str] = val
@@ -372,7 +374,6 @@ class IVPIVRProjectService:
 
 
 class VisualizationService:
-    "Visualization and PDF generation service"
 
     @staticmethod
     def save_portfolio_stats_pdf(pf, output_path: str):
@@ -396,7 +397,8 @@ class VisualizationService:
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close()
         except Exception as e:
-            pass
+            print(f"Error saving portfolio stats PDF: {e}")
+            raise e
 
     @staticmethod
     def create_heatmap(
@@ -421,6 +423,8 @@ class VisualizationService:
             heatmap_data = results_df.pivot_table(
                 index="IVP_from", columns="IVP_to", values=metric_name, aggfunc="mean"
             )
+
+            print(f"Heatmap value range: min={heatmap_data.min().min()}, max={heatmap_data.max().max()}")
 
             # Check if heatmap has data
             if heatmap_data.empty:
@@ -460,84 +464,8 @@ class VisualizationService:
 
         except Exception as e:
             plt.close()
-            return False
-
-    @staticmethod
-    def create_comprehensive_pdf(
-        symbol: str,
-        best_config: Dict,
-        best_pf,
-        all_results: List[Dict],
-        output_path: str,
-        heatmap_periods: List[Tuple[str, pd.DataFrame]] = None,
-    ):
-        try:
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-            with PdfPages(output_path) as pdf:
-                stats = best_pf.stats()
-                stats_df = stats.to_frame()
-
-                fig, ax = plt.subplots(figsize=(11, 8.5))
-                ax.axis("off")
-                ax.set_title(f"{symbol} - Portfolio Statistics", fontsize=16, pad=20)
-                table = ax.table(
-                    cellText=stats_df.values,
-                    colLabels=stats_df.columns,
-                    rowLabels=stats_df.index,
-                    cellLoc="center",
-                    loc="center",
-                )
-                table.auto_set_font_size(False)
-                table.set_fontsize(9)
-                table.scale(1, 1.5)
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close()
-
-                # Page 3: Equity curve
-                fig = best_pf.plot()
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close()
-
-                # Page 4+: Heatmaps for each period
-                if heatmap_periods:
-                    for period_name, results_df in heatmap_periods:
-                        if results_df.empty:
-                            continue
-
-                        # Create pivot table
-                        heatmap_data = results_df.pivot_table(
-                            index="IVP_from",
-                            columns="IVP_to",
-                            values="Total Return [%]",
-                            aggfunc="mean",
-                        )
-
-                        if heatmap_data.empty or heatmap_data.isna().all().all():
-                            continue
-
-                        fig, ax = plt.subplots(figsize=(11, 8.5))
-                        sns.heatmap(
-                            heatmap_data,
-                            annot=True,
-                            fmt=".1f",
-                            cmap="RdYlGn",
-                            center=0,
-                            ax=ax,
-                            cbar_kws={"label": "Total Return [%]"},
-                            linewidths=0.5,
-                            linecolor="gray",
-                        )
-                        ax.set_title(f"{symbol} - {period_name}", fontsize=16, pad=10)
-                        ax.set_xlabel("IVP/IVR Upper Bound", fontsize=12)
-                        ax.set_ylabel("IVP/IVR Lower Bound", fontsize=12)
-
-                        pdf.savefig(fig, bbox_inches="tight")
-                        plt.close()
-            return True
-
-        except Exception as e:
-            return False
+            print(f"Error creating heatmap: {e}")
+            raise e
 
 
 def find_best_config(results: List[Dict]) -> Dict:

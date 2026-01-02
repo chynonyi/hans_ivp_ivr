@@ -1,5 +1,4 @@
 import asyncio
-import sys
 import yaml
 from functions import DataService
 
@@ -32,7 +31,7 @@ async def main():
             etf_symbol, start_etf, end_etf, is_etf=True, option_symbol=base
         )
 
-    print("--- Download Complete ---")
+    print("Download Complete")
 
 
 if __name__ == "__main__":
