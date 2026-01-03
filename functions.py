@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 import vectorbt as vbt
 import numpy as np
 
-# Set matplotlib to use non-GUI backend before importing pyplot
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -190,15 +189,15 @@ class DataService:
 def split_into_periods(
     start_date: str, end_date: str, window_years: int
 ) -> List[Tuple[str, str, str]]:
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
+    start = pd.Timestamp(start_date)
+    end = pd.Timestamp(end_date)
 
     periods = []
     current = start
 
     while current < end:
-        period_end = min(current + timedelta(days=365 * window_years), end)
-        period_name = f"{current.year}-{period_end.year}"
+        period_end = min(current + pd.DateOffset(years=window_years), end)
+        period_name = f"{current.year}_{period_end.year}"
         periods.append(
             (period_name, current.strftime("%Y-%m-%d"), period_end.strftime("%Y-%m-%d"))
         )
@@ -243,12 +242,11 @@ class IVPIVRProjectService:
     ) -> list:
         results = []
 
-        # Generate ranges: n1 is lower bound (X), n2 is upper bound (Y)
+        # Generate ranges: is lower bound X, is upper bound Y
         n1_values = np.arange(optimization_start, optimization_end, optimization_step)
 
         for n1 in n1_values:
             n1 = round(n1, 3)
-            # n2 must be >= n1
             n2_values = np.arange(
                 n1 + optimization_step,
                 optimization_end + optimization_step,
@@ -265,27 +263,24 @@ class IVPIVRProjectService:
                 )
 
                 pf_stats = pf.stats().to_dict()
-                pf_stats["Total Return [%]"] = float(
-                    pf_stats.get("Total Return [%]", 0) or 0
-                )
-                pf_stats["Open Trade PnL"] = float(
-                    pf_stats.get("Open Trade PnL", 0) or 0
-                )
-                pf_stats["End Value"] = float(pf_stats.get("End Value", 1) or 1)
+                
+                total_return = pf_stats.get("Total Return [%]")
+                if total_return is None or (isinstance(total_return, float) and np.isnan(total_return)):
+                    total_return = 0.0
+                
+                total_return = float(total_return)
+    
+                open_pnl = pf_stats.get("Open Trade PnL", 0.0)
+                if open_pnl is None or (isinstance(open_pnl, float) and np.isnan(open_pnl)):
+                    open_pnl = 0.0
+                
+                end_value = pf_stats.get("End Value", 1.0)
+                if end_value is None or (isinstance(end_value, float) and np.isnan(end_value)):
+                    end_value = 1.0
 
-                pf_stats["Total Return [%]"] = (
-                    0
-                    if np.isnan(pf_stats["Total Return [%]"])
-                    else pf_stats["Total Return [%]"]
-                )
-                pf_stats["Open Trade PnL"] = (
-                    0
-                    if np.isnan(pf_stats["Open Trade PnL"])
-                    else pf_stats["Open Trade PnL"]
-                )
-                pf_stats["Total Return [%]"] = pf_stats["Total Return [%]"] + (
-                    pf_stats["Open Trade PnL"] / pf_stats["End Value"] * 100
-                )
+                pf_stats["Total Return [%]"] = total_return
+                pf_stats["Open Trade PnL"] = float(open_pnl)
+                pf_stats["End Value"] = float(end_value)
 
                 stats = {"IVP_from": n1, "IVP_to": n2}
                 stats.update(pf_stats)
@@ -335,9 +330,7 @@ class IVPIVRProjectService:
         symbol: str,
     ):
         # Calculate positions
-        # Assuming ivp_ivr_blend is already in symbol_df
         if "ivp_ivr_blend" not in symbol_df.columns:
-            # Fallback if not present (should generally be present)
             pass
 
         symbol_df_positions = pd.Series(0, index=symbol_df.index)

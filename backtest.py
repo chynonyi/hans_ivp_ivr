@@ -85,11 +85,13 @@ async def main():
 
         # Export Trades
         try:
-            pf.trades.records_readable.to_csv(
+            trades_df = pf.trades.records_readable
+            trades_df['Config'] = f"{ivp_from}-{ivp_to}"
+            trades_df.to_csv(
                 trades_dir / f"{symbol}_trades.csv", index=False
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"Failed to export trades for {symbol}: {e}")
 
         # Save Portfolio Stats PDF
         try:
@@ -108,15 +110,38 @@ async def main():
         if opt_results_file.exists():
             try:
                 opt_results_df = pd.read_csv(opt_results_file)
-                heatmap_pdf_path = heatmaps_dir / f"{symbol}_heatmap.pdf"
+                
+                # Check for "Period" column
+                if "Period" in opt_results_df.columns:
+                    periods = opt_results_df["Period"].unique()
+                    print(f"Found periods for {symbol}: {periods}")
+                    
+                    for period in periods:
+                        if period == "Full":
+                            continue
 
-                # Create the heatmap using the persisted data
-                VisualizationService.create_heatmap(
-                    results_df=opt_results_df,
-                    metric_name="Total Return [%]",
-                    output_path=str(heatmap_pdf_path),
-                )
-                print(f"Saved Heatmap: {heatmap_pdf_path}")
+                        # Filter for specific period
+                        period_df = opt_results_df[opt_results_df["Period"] == period]
+                        
+                        # Determine filename suffix
+                        suffix = f"_{period}"
+                        heatmap_pdf_path = heatmaps_dir / f"{symbol}_heatmap{suffix}.pdf"
+                        
+                        VisualizationService.create_heatmap(
+                            results_df=period_df,
+                            metric_name="Total Return [%]",
+                            output_path=str(heatmap_pdf_path),
+                        )
+                        print(f"Saved Heatmap ({period}): {heatmap_pdf_path}")
+                else:
+                    # Backward compatibility
+                    heatmap_pdf_path = heatmaps_dir / f"{symbol}_heatmap.pdf"
+                    VisualizationService.create_heatmap(
+                        results_df=opt_results_df,
+                        metric_name="Sharpe Ratio",
+                        output_path=str(heatmap_pdf_path),
+                    )
+                    print(f"Saved Heatmap: {heatmap_pdf_path}")
             except Exception as e:
                 print(f"Failed to create heatmap: {e}")
         else:

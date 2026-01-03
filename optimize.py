@@ -7,6 +7,7 @@ from functions import (
     IVPIVRProjectService,
     find_best_config,
     VisualizationService,
+    split_into_periods,
 )
 
 # Load Config
@@ -47,6 +48,7 @@ async def main():
             print(f"Skipping {symbol} (No data - run download.py first)")
             continue
 
+        # Run FULL period optimization
         opt_results = IVPIVRProjectService.run_optimization(
             symbol=symbol,
             df=df,
@@ -56,28 +58,69 @@ async def main():
             optimization_end=opt_end,
             optimization_date_start=opt_date_start,
         )
-        print(f"Optimizaion for {symbol} was successful")
+        
+        # Tag with Period
+        for res in opt_results:
+            res["Period"] = "Full"
+
+        print(f"Optimization for {symbol} (Full) was successful")
+
+        # WINDOWED OPTIMIZATION START
+        window_years = CONFIG["periods"]["stocks"].get("heatmap_window_years", 0)
+        
+        all_opt_results = []
+        all_opt_results.extend(opt_results)
+        
+        if window_years > 0:
+            print(f"Running windowed optimization for {symbol} ({window_years} years)...")
+            
+            # Determine end date
+            end_date_str = CONFIG["periods"]["stocks"]["end"] 
+            
+            # Split into periods
+            periods = split_into_periods(opt_date_start, end_date_str, window_years)
+            
+            for p_name, p_start, p_end in periods:
+                print(f"  Optimizing {symbol} for period {p_name}...")
+                
+                p_start_dt = pd.Timestamp(p_start)
+                p_end_dt = pd.Timestamp(p_end)
+                
+                # Slice DF to end at p_end
+                df_period_end = df[df.index <= p_end_dt].copy()
+                
+                period_res = IVPIVRProjectService.run_optimization(
+                    symbol=symbol,
+                    df=df_period_end, # optimization will act on this
+                    ivp_ivr_lookback_days=lookback,
+                    optimization_step=opt_step,
+                    optimization_start=opt_start,
+                    optimization_end=opt_end,
+                    optimization_date_start=p_start, # optimization will slice >= this
+                )
+                
+                for r in period_res:
+                    r["Period"] = p_name
+                
+                all_opt_results.extend(period_res)
+
+        # WINDOWED OPTIMIZATION END
 
         if not opt_results:
-            print(f"Optimizaion for {symbol} was unsuccessful")
-            continue
+             print(f"Optimization for {symbol} (Full) returned no results.")
+             if not all_opt_results:
+                 continue
 
+        # Find best using ONLY "Full" results
         best = find_best_config(opt_results)
         if best:
             best["Symbol"] = symbol
             best["Type"] = "Stock"
             results.append(best)
-            results_df = pd.DataFrame(opt_results)
-            # Save raw optimization results for backtest.py
+            
+            # Save ALL results (Full + Periods)
+            results_df = pd.DataFrame(all_opt_results)
             results_df.to_csv(opt_results_dir / f"{symbol}_opt_results.csv", index=False)
-            # # Heatmap
-            # heatmap_path = heatmaps_dir / f"{symbol}_optimization_heatmap.png"
-            # 
-            # VisualizationService.create_heatmap(
-            #     results_df=results_df,
-            #     metric_name="Total Return %",
-            #     output_path=str(heatmap_path),
-            # )
     # 2. ETFs
     etfs = CONFIG["tickers"]["etfs"]
     opt_date_start_etf = CONFIG["periods"]["etfs"]["optimization_start"]
@@ -89,6 +132,7 @@ async def main():
             print(f"Skipping {etf_symbol}: No data found for {etf_symbol}")
             continue
 
+        # Run FULL period optimization
         opt_results = IVPIVRProjectService.run_optimization(
             symbol=etf_symbol,
             df=df,
@@ -98,11 +142,57 @@ async def main():
             optimization_end=opt_end,
             optimization_date_start=opt_date_start_etf,
         )
-        print(f"Optimizaion for {etf_symbol} was successful")
+        
+        # Tag with Period
+        for res in opt_results:
+            res["Period"] = "Full"
+
+        print(f"Optimization for {etf_symbol} (Full) was successful")
+
+        # WINDOWED OPTIMIZATION START
+        window_years = CONFIG["periods"]["etfs"].get("heatmap_window_years", 0)
+        
+        all_opt_results = []
+        all_opt_results.extend(opt_results)
+        
+        if window_years > 0:
+            print(f"Running windowed optimization for {etf_symbol} ({window_years} years)...")
+            
+            # Determine end date
+            end_date_str = CONFIG["periods"]["etfs"]["end"] 
+            
+            # Split into periods
+            periods = split_into_periods(opt_date_start_etf, end_date_str, window_years)
+            
+            for p_name, p_start, p_end in periods:
+                print(f"  Optimizing {etf_symbol} for period {p_name}...")
+                
+                p_start_dt = pd.Timestamp(p_start)
+                p_end_dt = pd.Timestamp(p_end)
+                
+                # Slice DF to end at p_end
+                df_period_end = df[df.index <= p_end_dt].copy()
+                
+                period_res = IVPIVRProjectService.run_optimization(
+                    symbol=etf_symbol,
+                    df=df_period_end,
+                    ivp_ivr_lookback_days=lookback,
+                    optimization_step=opt_step,
+                    optimization_start=opt_start,
+                    optimization_end=opt_end,
+                    optimization_date_start=p_start,
+                )
+                
+                for r in period_res:
+                    r["Period"] = p_name
+                
+                all_opt_results.extend(period_res)
+        # WINDOWED OPTIMIZATION END
 
         if not opt_results:
-            print(f"Optimizaion for {etf_symbol} was unsuccessful")
-            continue
+            print(f"Optimization for {etf_symbol} (Full) returned no results.")
+            if not all_opt_results:
+                continue
 
         best = find_best_config(opt_results)
         if best:
@@ -110,20 +200,13 @@ async def main():
             best["Type"] = "ETF"
             results.append(best)
 
-            results_df = pd.DataFrame(opt_results)
-            # Save raw optimization results for backtest.py
+            # Save ALL results
+            results_df = pd.DataFrame(all_opt_results)
             results_df.to_csv(opt_results_dir / f"{etf_symbol}_opt_results.csv", index=False)
-            # # Heatmap
-            # heatmap_path = heatmaps_dir / f"{etf_symbol}_optimization_heatmap.png"
-            # VisualizationService.create_heatmap(
-            #     results_df=results_df,
-            #     metric_name="Total Return %",
-            #     output_path=str(heatmap_path),
-            # )
     # Save Results
     if results:
         df_res = pd.DataFrame(results)
-        df_res = df_res.sort_values("Total Return %", ascending=False)
+        df_res = df_res.sort_values("Total Return [%]", ascending=False)
         df_res.to_csv(best_configs_file, index=False)
         print(f"Optimization results saved to {best_configs_file}")
     else:
